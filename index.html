@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f1a17">
+<title>Seoul Local Eats</title>
+<meta name="description" content="Where Seoul locals actually eat: a mobile map of everyday restaurants with Korean names to show staff, opening hours and what to order.">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Seoul Eats">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#f6f2ec; --panel:#fffdf9; --ink:#1f1a17; --muted:#77695e; --line:#e6ddd2; --chip:#f1e9df;
+  --red:#d9472b; --red-soft:#fbe5df; --ok:#2f7d4f; --ok-bg:#e1f1e6; --warn:#a14a12; --warn-bg:#fdf0df;
+  --gold:#c98a12; --shadow:0 8px 28px rgba(40,25,10,.16);
+  --font:"Inter",system-ui,-apple-system,sans-serif; --kr:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#171310; --panel:#211c18; --ink:#f3ece4; --muted:#ab9d90; --line:#352d27; --chip:#2b241f;
+  --red:#ff7556; --red-soft:#3a201a; --ok:#6fcb95; --ok-bg:#1b3526; --warn:#f2b37a; --warn-bg:#3a2a18;
+  --gold:#f2c14e; --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171310; --panel:#211c18; --ink:#f3ece4; --muted:#ab9d90; --line:#352d27; --chip:#2b241f;
+  --red:#ff7556; --red-soft:#3a201a; --ok:#6fcb95; --ok-bg:#1b3526; --warn:#f2b37a; --warn-bg:#3a2a18;
+  --gold:#f2c14e; --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font)}
+button,input,select{font:inherit;color:inherit}
+.kr{font-family:var(--kr)}
+#app{position:relative;display:grid;grid-template-columns:400px 1fr;grid-template-rows:auto 1fr auto;height:100dvh}
+#top{grid-column:1;grid-row:1;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 18px 10px;z-index:3}
+#side{grid-column:1;grid-row:2;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;z-index:2}
+#map{grid-column:2;grid-row:1/4;height:100%;z-index:1;background:var(--chip)}
+#tabs{grid-column:1;grid-row:3;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--panel);border-right:1px solid var(--line);border-top:1px solid var(--line);padding:6px 10px;z-index:3}
+.tab{display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:none;border-radius:10px;padding:8px 4px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.tab span{font-size:16px}
+.tab.on{background:var(--chip);color:var(--ink)}
+h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.02em}
+h1 b{color:var(--red)}
+.sub{margin:4px 0 10px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.search{display:flex;gap:8px}
+.sbox{flex:1;min-width:0;display:flex;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:0 4px 0 12px}
+.sbox input{flex:1;min-width:0;border:0;background:none;outline:0;font-size:16px;padding:10px 0}
+.sbox input::-webkit-search-cancel-button{display:none}
+#qx{border:0;background:none;width:36px;height:36px;font-size:18px;color:var(--muted);cursor:pointer}
+select{font-size:14.5px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:0 10px;min-width:0;max-width:42%}
+.chips{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--panel);border-radius:20px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+#sortbar{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line);font-size:13px}
+#count{font-weight:800;font-size:15px;margin-right:auto}
+#list{overflow:auto;flex:1;min-height:0;padding-bottom:8px}
+.item{display:block;width:100%;text-align:left;background:none;border:0;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:hover,.item.on{background:var(--chip)}
+.name{font-weight:700;font-size:15.5px}
+.name .kr{font-weight:500;font-size:13px;color:var(--muted);margin-left:6px}
+.meta{font-size:12.5px;color:var(--muted);margin-top:3px}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tag{font-size:11.5px;font-weight:600;border-radius:20px;padding:2px 8px;background:var(--chip);color:var(--ink)}
+.tag.p{background:var(--red-soft);color:var(--red)}
+.lockrow{display:block;width:100%;text-align:left;border:0;background:none;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;color:var(--muted)}
+.lockrow b{color:var(--ink)}
+.pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:grid;place-items:center;border:2px solid #fff;box-shadow:var(--shadow);background:var(--red);position:relative}
+.pin b{transform:rotate(45deg);font-size:13px;color:#fff}
+.pin.sel{outline:3px solid var(--ink);outline-offset:2px}
+.marker-cluster{background:transparent}
+.marker-cluster div{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--panel);font-weight:800;font-size:13px;border:3px solid var(--panel);box-shadow:var(--shadow)}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border-radius:14px;box-shadow:var(--shadow)}
+.leaflet-popup-tip{background:var(--panel)}
+.leaflet-popup-content{margin:14px 16px;font-family:var(--font);width:320px!important;max-height:64vh;overflow:auto}
+/* detail */
+.pop h3{margin:0;font-size:19px;line-height:1.3}
+.showcard{margin:10px 0 4px;border:1.5px dashed var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.showcard small{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.showcard .kr{font-size:22px;font-weight:700;line-height:1.35}
+.showcard .addr{font-size:14px;font-weight:500;margin-top:4px;line-height:1.45}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0 4px}
+.act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);text-decoration:none;font-size:11.5px;font-weight:700;cursor:pointer;padding:6px 2px;text-align:center}
+.act span{font-size:18px;line-height:1}
+.act.main{background:var(--ok);border-color:var(--ok);color:#fff}
+.sec{margin-top:12px;font-size:14px;line-height:1.6}
+.sec>b{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.warnline{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:8px 10px;font-size:13px}
+.cpnote{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5}
+/* panels */
+.panel{position:absolute;top:0;bottom:0;left:400px;right:0;z-index:7;background:var(--bg);overflow:auto;overscroll-behavior:contain}
+.panel[hidden]{display:none}
+.pin-in{max-width:640px;margin:0 auto;padding:22px 18px 40px}
+.pin-in h2{font-size:22px;margin:4px 0 6px;letter-spacing:-.01em}
+.pin-in p{font-size:14.5px;line-height:1.65;color:var(--muted);margin:6px 0}
+.area{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-top:8px;cursor:pointer;width:100%;text-align:left}
+.area .n{flex:1;min-width:0}
+.area .n b{display:block;font-size:15.5px}
+.area .n small{color:var(--muted);font-size:12.5px}
+.area .c{font-weight:800;font-size:14px;white-space:nowrap}
+.area .free{font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-bg);border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:2px}
+.unlockbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px}
+.unlockbox h3{margin:0 0 4px;font-size:17px}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:12px;padding:13px;font-weight:800;font-size:15px;background:var(--red);color:#fff;text-decoration:none;cursor:pointer;margin-top:10px}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--ink)}
+.codein{display:flex;gap:8px;margin-top:10px}
+.codein input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;font-size:16px;letter-spacing:.06em;text-transform:uppercase}
+.codein button{flex:none;width:auto;margin:0;padding:0 18px}
+.msg{font-size:13px;margin-top:8px;min-height:18px}
+.msg.bad{color:var(--red)} .msg.good{color:var(--ok)}
+.tipcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-top:8px}
+.tipcard b{display:block;font-size:15px;margin-bottom:2px}
+.tipcard p{margin:0;font-size:13.5px}
+#grab,#detail{display:none}
+#toast{position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:9px 16px;border-radius:20px;font-size:13px;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+#toast.on{opacity:1}
+@media (max-width:760px){
+  html,body{overflow:hidden;overscroll-behavior:none}
+  #app{display:block;height:100dvh;overflow:clip;--tabh:calc(58px + env(safe-area-inset-bottom,0px))}
+  #map{position:absolute;inset:0;height:auto}
+  #top{position:absolute;left:0;right:0;top:0;background:none;border:0;padding:calc(8px + env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));pointer-events:none}
+  #top>*{pointer-events:auto}
+  #top h1,#top .sub{display:none}
+  .sbox,select{background:var(--panel);box-shadow:var(--shadow);border-radius:14px;min-height:48px}
+  .chip{box-shadow:0 2px 8px rgba(40,25,10,.14);padding:8px 13px}
+  #side{position:absolute;left:0;right:0;bottom:var(--tabh);height:calc(100dvh - var(--top) - 6px - var(--tabh));border-right:0;border-top:1px solid var(--line);
+    border-radius:18px 18px 0 0;box-shadow:var(--shadow);transform:translateY(var(--off,0px));transition:transform .3s cubic-bezier(.2,.8,.2,1);z-index:5}
+  #side.drag{transition:none}
+  #side.away{transform:translateY(calc(100% + var(--tabh)))}
+  #grab{display:flex;justify-content:center;padding:9px 0 3px;touch-action:none;border:0;background:none;width:100%}
+  #grab i{display:block;width:44px;height:5px;border-radius:5px;background:var(--muted);opacity:.45}
+  #sortbar{touch-action:none;padding:4px 16px 10px}
+  #list{padding-bottom:calc(var(--off,0px) + 12px);overscroll-behavior:contain}
+  .item{padding:14px 16px}
+  .leaflet-control-zoom{display:none}
+  .leaflet-control-attribution{font-size:9px}
+  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:8;border:0;border-top:1px solid var(--line);height:var(--tabh);
+    padding:4px max(6px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px))}
+  .tab{flex-direction:column;gap:1px;font-size:11.5px;padding:4px 2px}
+  .tab span{font-size:20px}
+  .tab.on{background:none;color:var(--red)}
+  .panel{left:0;bottom:var(--tabh);padding-top:env(safe-area-inset-top,0px)}
+  #detail{display:flex;flex-direction:column;position:absolute;left:0;right:0;bottom:var(--tabh);max-height:calc(70dvh - var(--tabh) + 30px);background:var(--panel);border-radius:18px 18px 0 0;box-shadow:var(--shadow);z-index:6;
+    transform:translateY(calc(105% + var(--tabh)));transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  #detail.on{transform:translateY(var(--doff,0px))}
+  #detail.drag{transition:none}
+  #dhead{display:flex;justify-content:center;position:relative;padding:9px 0 2px;touch-action:none}
+  #dhead i{display:block;width:44px;height:5px;border-radius:5px;background:var(--muted);opacity:.45}
+  #dclose{position:absolute;right:8px;top:4px;width:40px;height:40px;border:0;background:none;font-size:22px;color:var(--muted);cursor:pointer}
+  #dbody{overflow:auto;padding:2px 16px 18px;overscroll-behavior:contain}
+  #dbody .pop h3{padding-right:34px}
+  #toast{bottom:calc(var(--tabh) + 14px)}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <h1>Seoul <b>Local</b> Eats</h1>
+    <p class="sub">Everyday places Seoul locals line up for. Korean names to show staff, hours, what to order, and whether you can go solo.</p>
+    <div class="search">
+      <label class="sbox"><input id="q" type="search" enterkeyhint="search" placeholder="Search: noodles, BBQ, Myeongdong…" autocomplete="off"><button id="qx" type="button" aria-label="Clear" hidden>✕</button></label>
+      <select id="region" aria-label="Area"></select>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <aside id="side">
+    <button id="grab" type="button" aria-label="Resize list"><i></i></button>
+    <div id="sortbar"><span id="count"></span></div>
+    <div id="list"></div>
+  </aside>
+  <div id="map"></div>
+  <nav id="tabs" aria-label="Menu">
+    <button class="tab on" data-t="map" type="button"><span>🍜</span>Eat</button>
+    <button class="tab" data-t="areas" type="button"><span>🗺️</span>Areas</button>
+    <button class="tab" data-t="tips" type="button"><span>💡</span>Tips</button>
+  </nav>
+  <section id="areas" class="panel" hidden aria-label="Areas"><div class="pin-in" id="areasBody"></div></section>
+  <section id="tips" class="panel" hidden aria-label="Tips"><div class="pin-in" id="tipsBody"></div></section>
+  <section id="detail" aria-label="Place">
+    <div id="dhead"><i></i><button id="dclose" type="button" aria-label="Close">✕</button></div>
+    <div id="dbody"></div>
+  </section>
+  <div id="toast" role="status"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script>
+const BUY_URL = "";       // Gumroad product link for the full unlock
+const AFFILIATES = [];    // {icon, title, text, url} — travel affiliate links, shown in Tips with a disclosure
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MOBILE = matchMedia("(max-width:760px)").matches;
+function toast(t){const el=$("toast");el.textContent=t;el.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("on"),2400);}
+const LS = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+const USES = {"아침 일찍":"Early breakfast","2시 이후 점심":"No afternoon break","혼밥 15분":"Solo-friendly","비 오는 날":"Rainy day","팀장님 모시고":"Nice sit-down","법카 회식":"Group dinner","줄 서도 가는 집":"Worth the queue","노포":"Old-school (30+ yrs)"};
+const PRICE = {"1만원 이하":"Under ₩10k","1~2만원":"₩10–20k","2~3만원":"₩20–30k","3만원 이상":"₩30k+"};
+
+let REGIONS = [], LOCKED = [], ALL = [];
+const state = {region: "", uses: new Set(), cheap: false};
+
+// ---------- map ----------
+const map = L.map("map", {zoomControl: !MOBILE, minZoom: 10, zoomSnap: 0.5, maxBounds: L.latLngBounds([37.2, 126.6], [37.8, 127.4]), maxBoundsViscosity: .8});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+map.setView([37.555, 126.99], 12);
+const cluster = L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 45,
+  iconCreateFunction: c => L.divIcon({html: `<div>${c.getChildCount()}</div>`, className: "marker-cluster", iconSize: [38, 38]})});
+map.addLayer(cluster);
+let selId = null;
+const pinIcon = p => L.divIcon({className: "", iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -30], html: `<div class="pin${p._id === selId ? " sel" : ""}"><b>🍜</b></div>`});
+
+// ---------- links ----------
+function links(p) {
+  const q = encodeURIComponent(p.name_ko + " " + (p.address_ko || "").split(" ").slice(0, 3).join(" "));
+  const g = encodeURIComponent(p.name_ko + " " + (p.address_ko || ""));
+  return {naver: `https://map.naver.com/p/search/${q}`, kakao: `https://map.kakao.com/?q=${q}`, google: `https://www.google.com/maps/search/?api=1&query=${g}`};
+}
+async function copy(t, msg) {
+  try { await navigator.clipboard.writeText(t); toast(msg || "Copied"); } catch (e) { toast("Long-press the text to copy"); }
+}
+
+function detail(p) {
+  const el = document.createElement("div"); el.className = "pop"; const L_ = links(p);
+  const uses = (p.uses || []).map(u => `<span class="tag">${esc(USES[u] || u)}</span>`).join("");
+  const check = /check before going/i.test((p.hours_en || "") + (p.off_en || ""));
+  el.innerHTML = `<h3>${esc(p.name_en)}</h3>
+    <div class="meta">${esc(p.area_en)} · ${esc(p.category_en)}${p.price ? " · " + esc(PRICE[p.price] || p.price) : ""}</div>
+    <div class="tags">${uses}</div>
+    <div class="showcard"><small>Show this to staff or a taxi driver</small><div class="kr">${esc(p.name_ko)}</div>${p.address_ko ? `<div class="addr kr">${esc(p.address_ko)}</div>` : ""}</div>
+    <div class="acts">
+      <a class="act main" href="${L_.naver}" target="_blank" rel="noopener"><span>🧭</span>Naver Map</a>
+      <a class="act" href="${L_.kakao}" target="_blank" rel="noopener"><span>🗺️</span>Kakao Map</a>
+      <a class="act" href="${L_.google}" target="_blank" rel="noopener"><span>📍</span>Google</a>
+      <button class="act" type="button" data-copy><span>📋</span>Copy address</button>
+    </div>
+    ${p.summary_en ? `<div class="sec">${esc(p.summary_en)}</div>` : ""}
+    ${p.menu_en ? `<div class="sec"><b>What to order</b>${esc(p.menu_en).replace(/ · /g, "<br>")}</div>` : ""}
+    <div class="sec"><b>Hours</b>${esc(p.hours_en || "Not listed")}<br>${esc(p.off_en || "")}</div>
+    ${check ? `<div class="sec warnline">Hours vary between sources. Check Naver Map before you go.</div>` : ""}
+    ${p.tip_en ? `<div class="sec"><b>Local tip</b>${esc(p.tip_en)}</div>` : ""}`;
+  el.querySelector("[data-copy]").onclick = () => copy(p.address_ko || p.name_ko, "Korean address copied");
+  return el;
+}
+
+// ---------- data ----------
+async function getJSON(u) { const r = await fetch(u, {cache: "no-cache"}); if (!r.ok) throw new Error(u); return r.json(); }
+function addRegions(regs, locked) {
+  for (const r of regs) {
+    if (REGIONS.some(x => x.slug === r.slug)) continue;
+    REGIONS.push(r);
+    r.places.forEach((p, i) => {
+      p._id = ALL.length; p._region = r.slug;
+      p._hay = [p.name_en, p.name_ko, p.area_en, p.category_en, p.menu_en, p.summary_en, r.name].join(" ").toLowerCase();
+      if (p.lat != null && p.lon != null) {
+        p.marker = L.marker([p.lat, p.lon], {icon: pinIcon(p), title: p.name_en});
+        if (MOBILE) p.marker.on("click", () => openDetail(p));
+        else p.marker.bindPopup(() => detail(p), {maxWidth: 360, autoPanPaddingTopLeft: [16, 16], autoPanPaddingBottomRight: [16, 16]});
+      }
+      ALL.push(p);
+    });
+  }
+  REGIONS.sort((a, b) => a.order - b.order);
+  LOCKED = LOCKED.filter(l => !REGIONS.some(r => r.slug === l.slug));
+}
+function fillRegionSelect() {
+  const s = $("region"), cur = s.value;
+  s.innerHTML = `<option value="">All areas</option>` + REGIONS.map(r => `<option value="${r.slug}">${esc(r.name)}</option>`).join("")
+    + LOCKED.map(r => `<option value="lock:${r.slug}">🔒 ${esc(r.name)}</option>`).join("");
+  s.value = [...s.options].some(o => o.value === cur) ? cur : "";
+}
+
+// ---------- unlock ----------
+async function decrypt(enc, code) {
+  const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(code.trim().toUpperCase()), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({name: "PBKDF2", salt: b(enc.salt), iterations: enc.iter, hash: "SHA-256"}, base, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: b(enc.iv)}, key, b(enc.data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+let ENC = null;
+async function unlock(code, quiet) {
+  if (!code) return false;
+  try {
+    ENC = ENC || await getJSON("data/paid.enc");
+    const data = await decrypt(ENC, code);
+    addRegions(data.regions); LS.set("sle-code", code.trim().toUpperCase());
+    fillRegionSelect(); renderAreas(); render(true);
+    if (!quiet) toast(`Unlocked ${data.regions.length} more areas 🎉`);
+    return true;
+  } catch (e) { if (!quiet) toast("That code didn't work"); return false; }
+}
+
+// ---------- filters ----------
+const CHIPS = [["cheap", "Under ₩10k"], ...Object.entries(USES).filter(([k]) => k !== "팀장님 모시고")];
+$("chips").innerHTML = CHIPS.map(([k, v]) => `<button class="chip" data-v="${esc(k)}" type="button">${esc(v)}</button>`).join("");
+$("chips").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (!c) return; const v = c.dataset.v;
+  if (v === "cheap") state.cheap = !state.cheap; else state.uses.has(v) ? state.uses.delete(v) : state.uses.add(v);
+  c.classList.toggle("on"); render(true);
+});
+function visible() {
+  const words = $("q").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return ALL.filter(p => (!state.region || p._region === state.region) && words.every(w => p._hay.includes(w))
+    && [...state.uses].every(u => (p.uses || []).includes(u)) && (!state.cheap || p.price === "1만원 이하"));
+}
+function render(redraw) {
+  const shown = visible();
+  if (redraw) { cluster.clearLayers(); cluster.addLayers(shown.filter(p => p.marker).map(p => p.marker)); }
+  $("count").textContent = `${shown.length} places`;
+  const regName = slug => (REGIONS.find(r => r.slug === slug) || {}).name || "";
+  const lockRows = (!state.region && LOCKED.length) ? `<button class="lockrow" type="button" data-unlock>🔒 <b>${LOCKED.reduce((a, r) => a + r.count, 0)} more places</b> in ${LOCKED.length} other areas · Unlock all</button>` : "";
+  $("list").innerHTML = shown.map(p => `<button type="button" class="item${p._id === selId ? " on" : ""}" data-id="${p._id}">
+      <div class="name">${esc(p.name_en)}<span class="kr">${esc(p.name_ko)}</span></div>
+      <div class="meta">${esc(p.area_en)} · ${esc(p.category_en)}${p.price ? " · " + esc(PRICE[p.price] || p.price) : ""}${!state.region ? " · " + esc(regName(p._region)) : ""}</div>
+      <div class="tags">${(p.uses || []).slice(0, 3).map(u => `<span class="tag">${esc(USES[u] || u)}</span>`).join("")}</div></button>`).join("")
+    + lockRows || `<p style="padding:18px;color:var(--muted)">Nothing matches. Try fewer filters.</p>`;
+  if (redraw && shown.length) {
+    const pts = shown.filter(p => p.lat != null).map(p => [p.lat, p.lon]);
+    if (pts.length) map.fitBounds(L.latLngBounds(pts), {maxZoom: 15, paddingTopLeft: [30, MOBILE ? $("top").offsetHeight + 20 : 40], paddingBottomRight: [30, 30 + sheetShown()]});
+  }
+}
+$("list").addEventListener("click", e => {
+  if (e.target.closest("[data-unlock]")) return showPanel("areas");
+  const el = e.target.closest(".item"); if (!el) return; const p = ALL[+el.dataset.id];
+  if (MOBILE) { if (p.marker) cluster.zoomToShowLayer(p.marker, () => openDetail(p)); else openDetail(p); return; }
+  if (p.marker) cluster.zoomToShowLayer(p.marker, () => p.marker.openPopup());
+});
+$("region").addEventListener("change", e => {
+  const v = e.target.value;
+  if (v.startsWith("lock:")) { e.target.value = state.region; return showPanel("areas"); }
+  state.region = v; render(true);
+});
+const q = $("q"); let qt;
+q.addEventListener("input", () => { $("qx").hidden = !q.value; clearTimeout(qt); qt = setTimeout(() => render(true), 300); });
+q.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); render(true); q.blur(); if (MOBILE) setSheet("half"); } });
+q.addEventListener("focus", () => { if (MOBILE) { if (detailOn) closeDetail(); setSheet("half"); } });
+$("qx").onclick = () => { q.value = ""; $("qx").hidden = true; render(true); };
+
+// ---------- mobile sheets ----------
+const side = $("side"), app = $("app");
+function measureTop() { if (MOBILE) app.style.setProperty("--top", $("top").offsetHeight + "px"); }
+let sheetState = "peek", sheetOff = 0;
+function offsets() { const h = side.offsetHeight; return {full: 0, half: Math.max(0, h - innerHeight * .5), peek: Math.max(0, h - ($("grab").offsetHeight + $("sortbar").offsetHeight))}; }
+function applyOff(px) { sheetOff = px; side.style.setProperty("--off", px + "px"); }
+function sheetShown() { return MOBILE && !side.classList.contains("away") ? side.offsetHeight - sheetOff : 0; }
+function setSheet(st) { if (!MOBILE) return; sheetState = st; applyOff(offsets()[st]); }
+function drag(handle, getOff, setOff, onEnd) {
+  let y0 = null, off0 = 0, t0 = 0, moved = false;
+  handle.addEventListener("pointerdown", e => { if (e.target.closest("#dclose")) return; y0 = e.clientY; off0 = getOff(); t0 = Date.now(); moved = false; handle.setPointerCapture(e.pointerId); onEnd.start && onEnd.start(); });
+  handle.addEventListener("pointermove", e => { if (y0 === null) return; const dy = e.clientY - y0; if (Math.abs(dy) > 5) moved = true; setOff(off0 + dy); });
+  const end = e => { if (y0 === null) return; const dy = e.clientY - y0, v = dy / Math.max(1, Date.now() - t0); y0 = null; onEnd(moved, dy, v); };
+  handle.addEventListener("pointerup", end); handle.addEventListener("pointercancel", end);
+}
+if (MOBILE) {
+  const end = (moved, dy, v) => { side.classList.remove("drag"); const o = offsets();
+    if (!moved) return setSheet(sheetState === "peek" ? "half" : "peek");
+    if (v > .5) return setSheet(sheetOff > o.half ? "peek" : "half");
+    if (v < -.5) return setSheet(sheetOff < o.half ? "full" : "half");
+    setSheet(Object.entries(o).sort((a, b) => Math.abs(a[1] - sheetOff) - Math.abs(b[1] - sheetOff))[0][0]); };
+  end.start = () => side.classList.add("drag");
+  const set = px => applyOff(Math.min(offsets().peek, Math.max(0, px)));
+  drag($("grab"), () => sheetOff, set, end); drag($("sortbar"), () => sheetOff, set, end);
+  map.on("click", () => { if (detailOn) closeDetail(); else if (sheetState !== "peek") setSheet("peek"); });
+  map.on("dragstart", () => sheetState !== "peek" && !detailOn && setSheet("peek"));
+  addEventListener("resize", () => { measureTop(); setSheet(sheetState); });
+}
+let detailOn = false; const det = $("detail");
+function select(p) { const prev = selId; selId = p ? p._id : null; [prev, selId].forEach(i => i != null && ALL[i] && ALL[i].marker && ALL[i].marker.setIcon(pinIcon(ALL[i]))); }
+function openDetail(p) {
+  select(p); $("dbody").innerHTML = ""; $("dbody").appendChild(detail(p)); $("dbody").scrollTop = 0;
+  det.style.setProperty("--doff", "0px"); det.classList.add("on"); side.classList.add("away");
+  if (!detailOn) history.pushState({d: 1}, ""); detailOn = true;
+  if (p.lat != null) requestAnimationFrame(() => { const z = Math.max(map.getZoom(), 15), h = det.offsetHeight;
+    map.setView(map.unproject(map.project([p.lat, p.lon], z).add([0, (h - $("top").offsetHeight) / 2]), z), z, {animate: true}); });
+}
+function closeDetail(fromHist) { if (!detailOn) return; detailOn = false; det.classList.remove("on"); side.classList.remove("away"); select(null); setSheet("peek"); if (!fromHist && history.state && history.state.d) history.back(); }
+addEventListener("popstate", () => closeDetail(true));
+$("dclose").onclick = () => closeDetail();
+if (MOBILE) { const end = (moved, dy) => { det.classList.remove("drag"); if (moved && dy > 90) closeDetail(); else det.style.setProperty("--doff", "0px"); };
+  end.start = () => det.classList.add("drag"); drag($("dhead"), () => 0, px => det.style.setProperty("--doff", Math.max(0, px) + "px"), end); }
+
+// ---------- tabs & panels ----------
+let panel = null;
+function showPanel(p) {
+  panel = p; $("areas").hidden = p !== "areas"; $("tips").hidden = p !== "tips";
+  if (p && detailOn) closeDetail();
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === (p || "map")));
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) showPanel(b.dataset.t === "map" ? null : b.dataset.t); });
+function renderAreas() {
+  const total = LOCKED.reduce((a, r) => a + r.count, 0);
+  $("areasBody").innerHTML = `<h2>Areas</h2><p>Tap an area to see it on the map.</p>`
+    + REGIONS.map(r => `<button class="area" type="button" data-slug="${r.slug}"><div class="n"><b>${esc(r.name)}${r.slug === "seoul-jongno-junggu" ? '<span class="free">FREE</span>' : ""}</b><small>${esc(r.sub)}</small></div><span class="c">${r.places.length}</span></button>`).join("")
+    + LOCKED.map(r => `<div class="area" style="cursor:default;opacity:.75"><div class="n"><b>🔒 ${esc(r.name)}</b><small>${esc(r.sub)}</small></div><span class="c">${r.count}</span></div>`).join("")
+    + (LOCKED.length ? `<div class="unlockbox"><h3>Unlock all ${LOCKED.length} areas · ${total} places</h3>
+        <p>One payment opens every area on this map, on any of your devices. You get an unlock code by email right after checkout.</p>
+        ${BUY_URL ? `<a class="btn" href="${esc(BUY_URL)}" target="_blank" rel="noopener">Get the full map</a>` : `<p style="font-weight:700;color:var(--ink)">Full map coming soon.</p>`}
+        <div class="codein"><input id="code" placeholder="Unlock code" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn ghost" id="codebtn" type="button">Unlock</button></div>
+        <div class="msg" id="codemsg"></div></div>` : `<div class="unlockbox"><h3>All areas unlocked ✓</h3><p>Thanks for supporting this map.</p></div>`);
+  const b = $("codebtn");
+  if (b) b.onclick = async () => { const m = $("codemsg"); m.className = "msg"; m.textContent = "Checking…";
+    const ok = await unlock($("code").value); m.className = "msg " + (ok ? "good" : "bad"); m.textContent = ok ? "Unlocked! Every area is now on the map." : "That code didn't work. Check for typos."; };
+}
+$("areasBody").addEventListener("click", e => { const a = e.target.closest("[data-slug]"); if (!a) return;
+  state.region = a.dataset.slug; $("region").value = a.dataset.slug; showPanel(null); render(true); if (MOBILE) setSheet("half"); });
+function renderTips() {
+  const aff = AFFILIATES.length ? `<h2 style="margin-top:26px">Handy for your trip</h2>` + AFFILIATES.map(a => `<a class="tipcard" style="display:block;color:inherit;text-decoration:none" href="${esc(a.url)}" target="_blank" rel="sponsored noopener"><b>${esc(a.icon)} ${esc(a.title)}</b><p>${esc(a.text)}</p></a>`).join("")
+    + `<p class="cpnote">Some links above are affiliate links. If you book through them we may earn a small commission at no extra cost to you.</p>` : "";
+  $("tipsBody").innerHTML = `<h2>Eating out in Seoul</h2>
+    <div class="tipcard"><b>🍲 2-portion minimums</b><p>BBQ, hot pots and stews are often sold for 2 people or more. Solo? Look for the "Solo-friendly" tag.</p></div>
+    <div class="tipcard"><b>📱 Queue apps need a Korean number</b><p>CatchTable and Tabling usually need a Korean phone. Put your name on the paper list or tablet at the door instead.</p></div>
+    <div class="tipcard"><b>🧭 Use Naver or Kakao Map</b><p>Google Maps walking directions are limited in Korea. Naver Map has English and works best for finding the door.</p></div>
+    <div class="tipcard"><b>⏰ Break time</b><p>Many places close between about 15:00 and 17:00. The "No afternoon break" tag means you can eat late lunch.</p></div>
+    <div class="tipcard"><b>💳 Paying</b><p>Cards work almost everywhere. Some old-school spots and markets prefer cash, and some ask you to pay first.</p></div>
+    ${aff}
+    <p class="cpnote">Info was checked in late 2026 from public sources and can change. Map data © OpenStreetMap contributors.</p>`;
+}
+
+// ---------- start ----------
+(async () => {
+  measureTop(); renderTips();
+  try {
+    const [free, paid] = await Promise.all([getJSON("data/free.json"), getJSON("data/paid.json").catch(() => ({regions: []}))]);
+    LOCKED = paid.regions || []; addRegions(free.regions);
+  } catch (e) { $("list").innerHTML = `<p style="padding:18px;color:var(--muted)">Couldn't load the map data. Please reload.</p>`; return; }
+  const saved = LS.get("sle-code");
+  if (saved) await unlock(saved, true);
+  fillRegionSelect(); renderAreas(); render(true); setSheet("peek");
+})();
+</script>
+</body>
+</html>
